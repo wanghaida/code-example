@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+    </head>
+    <body>
+        <script>
+            class FetchPool {
+                // 默认配置
+                options = {
+                    // 最大同时请求数量
+                    max: 6,
+                };
+                // 队列（待请求的任务列表）
+                queues = [];
+                // 计数（正在请求中的数量）
+                count = 0;
+
+                constructor(options) {
+                    this.options = { ...this.options, ...options };
+                    /**
+                     * 返回 fetch 函数
+                     *
+                     * @see https://developer.mozilla.org/zh-CN/docs/Web/API/fetch
+                     */
+                    return (input, init) => {
+                        // fetch 返回一个 promise
+                        return new Promise((resolve, reject) => {
+                            // 将这次请求的 input/init，promise 的 resolve/reject 放入队列，等待处理
+                            this.queues.push({
+                                input,
+                                init,
+                                resolve,
+                                reject,
+                            });
+                            // 处理队列
+                            this.runQueues();
+                        })
+                    }
+                }
+
+                runQueues() {
+                    // 判断队列中是否还有未请求的任务，没有则返回
+                    if (this.queues.length === 0) return;
+                    // 判断正在请求中的数量是否大于等于最大请求数，是则返回
+                    if (this.count >= this.options.max) return;
+
+                    // 将正在请求中的数量 +1
+                    this.count++;
+                    // 从队列中取出一个任务进行处理
+                    const queue = this.queues.shift();
+                    // 处理请求
+                    fetch(queue.input, queue.init).then((res) => {
+                        // 处理结束，将正在请求中的数量 -1
+                        this.count--;
+                        // 继续处理队列
+                        this.runQueues();
+                        // 返回请求结果
+                        return queue.resolve(res);
+                    }).catch((err) => {
+                        // 处理结束，将正在请求中的数量 -1
+                        this.count--;
+                        // 继续处理队列
+                        this.runQueues();
+                        // 返回请求结果
+                        return queue.reject(err);
+                    })
+                }
+            }
+
+            const fetchPool = new FetchPool({
+                max: 3,
+            });
+
+            for (let i = 0; i < 10; i++) {
+                fetchPool('https://uquuu.com/yesorno')
+                    .then((value) => {
+                        console.log('value :>> ', i, value);
+                    })
+                    .catch((error) => {
+                        console.log('error :>> ', i, error);
+                    });
+            }
+        </script>
+    </body>
+</html>
